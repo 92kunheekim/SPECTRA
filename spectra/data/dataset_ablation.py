@@ -76,6 +76,27 @@ REQUIRED_COLS = ["tcr_id", "tra_seq", "trb_seq", "peptide", "mhc_seq", "binding_
 SEP = "."
 
 
+# Accepted CSV column names per canonical Rosetta feature (first match wins):
+# canonical feat_<name>, bare <name>, plus known dataset-specific aliases.
+ROSETTA_COL_ALIASES = {name: [f"feat_{name}", name] for name in ROSETTA_FEATURE_NAMES}
+ROSETTA_COL_ALIASES["dG_separated_per_dSASA"] += [
+    "dG_separated/dSASAx100", "dG_separated/dSASA", "dG_separated_per_dSASAx100",
+]
+
+
+def _resolve_rosetta_cols(df_columns):
+    """Return actual CSV columns (in canonical order) if all 12 Rosetta features
+    resolve, else None. Accepts feat_* names, bare names, and known aliases."""
+    cols = set(df_columns)
+    resolved = []
+    for name in ROSETTA_FEATURE_NAMES:
+        col = next((c for c in ROSETTA_COL_ALIASES[name] if c in cols), None)
+        if col is None:
+            return None
+        resolved.append(col)
+    return resolved
+
+
 # ============================================================
 # 1. Dataset
 # ============================================================
@@ -145,16 +166,17 @@ class AblationDataset(Dataset):
         self._mhc_seqs = df["mhc_seq"].values
         self._labels = df["binding_label"].values.astype(np.int64)
 
-        # ---- Rosetta features ----
-        has_all = all(c in df.columns for c in ROSETTA_FEAT_COLS)
-        if has_all:
-            self._rosetta = df[ROSETTA_FEAT_COLS].values.astype(np.float32)
+        # ---- Rosetta features (accept feat_*, bare names, or aliases) ----
+        resolved_cols = _resolve_rosetta_cols(df.columns)
+        if resolved_cols is not None:
+            self._rosetta = df[resolved_cols].values.astype(np.float32)
             self._has_rosetta = ~np.isnan(self._rosetta).any(axis=1)
-            # Replace NaN with 0 for tensor compatibility
-            self._rosetta = np.nan_to_num(self._rosetta, nan=0.0)
+            self._rosetta = np.nan_to_num(self._rosetta, nan=0.0)  # NaN -> 0
+            self._rosetta_cols = resolved_cols
         else:
             self._rosetta = np.zeros((len(df), N_ROSETTA_FEATURES), dtype=np.float32)
             self._has_rosetta = np.zeros(len(df), dtype=bool)
+            self._rosetta_cols = None
 
         # ---- Domain / sample weights ----
         if "domain" in df.columns:

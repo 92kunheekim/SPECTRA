@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - CI builds+pushes serving and training images to GHCR; API uses a lifespan handler.
 
 ### Fixed
+- Rosetta feature loading now accepts bare CSV column names + the `dG_separated/dSASAx100` alias (previously required `feat_*`, so features loaded as zero).
 - Quickstart now runs: real `spectra.training.train` entrypoint (full model by
   default), `scripts/run_ablation.sh` / `run_ensemble.sh` match the actual CLI.
 - Multi-GPU wired: `make_trainer` drives the ablation runner; `--devices /

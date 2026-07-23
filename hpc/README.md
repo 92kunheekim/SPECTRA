@@ -49,9 +49,9 @@ data + ESM. Monitor with `bjobs -l`, `bhist -l`, `nvidia-smi`.
 
 ## 5. Aggregate results (login node)
 ```bash
-apptainer exec "$SPECTRA_SIF" python -m spectra.evaluation.aggregate \
+apptainer exec --bind "$SCRATCH:$SCRATCH" "$SPECTRA_SIF" python -m spectra.evaluation.aggregate \
     --results_dir "$SCRATCH/spectra/out/phase2_cv" --group_by fold --out_prefix docs/results
-apptainer exec "$SPECTRA_SIF" python -m spectra.evaluation.aggregate \
+apptainer exec --bind "$SCRATCH:$SCRATCH" "$SPECTRA_SIF" python -m spectra.evaluation.aggregate \
     --results_dir "$SCRATCH/spectra/out/phase1_ablation" --group_by mode --out_prefix docs/ablation
 ```
 Writes `docs/results.md` + `docs/results.png` (mean±std AUROC/AUPRC/AUC0.1/MCC/
