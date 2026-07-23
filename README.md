@@ -11,6 +11,8 @@ Multimodal deep learning for T-cell receptor–peptide-MHC binding prediction �
 ![license](https://img.shields.io/badge/license-Yale%20Non--Commercial-blue)
 ![status](https://img.shields.io/badge/status-research-orange)
 
+**▶ Live API:** [`/docs`](https://kunheekim--spectra-tcr-pmhc-fastapi-app.modal.run/docs) — scale-to-zero FastAPI on Modal. Serves the mode-E architecture with an *untrained smoke checkpoint* (placeholder scores) to demonstrate the serving path; see [Performance](#performance-deployed-inference).
+
 </div>
 
 ## Overview
