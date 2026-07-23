@@ -13,7 +13,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from spectra.inference.serving import load_model, score_batch
@@ -91,3 +91,104 @@ def predict_batch(pairs: List[Pair]):
     probs = score_batch(_STATE["model"], _STATE["tok"], _rows(pairs),
                         mode=_STATE["mode"], device=_device())
     return {"probabilities": probs}
+
+
+# ----------------------------------------------------------------------------
+# Lightweight in-process metrics (zero external deps): a rolling window of
+# request latencies + status counters, exposed as JSON (/stats) and Prometheus
+# text (/metrics) so latency percentiles and throughput are observable in prod.
+# ----------------------------------------------------------------------------
+import time as _time
+from collections import deque, Counter
+from threading import Lock
+
+_METRICS = {
+    "start": _time.time(),
+    "lat_ms": deque(maxlen=2000),
+    "total": 0,
+    "errors": 0,
+    "by_status": Counter(),
+    "lock": Lock(),
+}
+
+
+def _percentile(sorted_xs, p):
+    if not sorted_xs:
+        return 0.0
+    k = (len(sorted_xs) - 1) * p / 100.0
+    f = int(k)
+    if f + 1 >= len(sorted_xs):
+        return sorted_xs[f]
+    return sorted_xs[f] + (sorted_xs[f + 1] - sorted_xs[f]) * (k - f)
+
+
+@app.middleware("http")
+async def _track_metrics(request, call_next):
+    t0 = _time.perf_counter()
+    status = 500
+    try:
+        resp = await call_next(request)
+        status = resp.status_code
+        return resp
+    finally:
+        dt = (_time.perf_counter() - t0) * 1000.0
+        if request.url.path not in ("/metrics", "/stats", "/health", "/docs", "/openapi.json"):
+            with _METRICS["lock"]:
+                _METRICS["lat_ms"].append(dt)
+                _METRICS["total"] += 1
+                _METRICS["by_status"][status] += 1
+                if status >= 500:
+                    _METRICS["errors"] += 1
+
+
+def _snapshot():
+    with _METRICS["lock"]:
+        xs = sorted(_METRICS["lat_ms"])
+        total, errors = _METRICS["total"], _METRICS["errors"]
+        by_status = dict(_METRICS["by_status"])
+        uptime = _time.time() - _METRICS["start"]
+    return xs, total, errors, by_status, uptime
+
+
+@app.get("/stats")
+def stats():
+    """Human-readable metrics: throughput and exact latency percentiles (ms)."""
+    xs, total, errors, by_status, uptime = _snapshot()
+    return {
+        "uptime_s": round(uptime, 1),
+        "requests_total": total,
+        "errors_total": errors,
+        "requests_per_s": round(total / uptime, 2) if uptime > 0 else 0.0,
+        "latency_ms": {
+            "p50": round(_percentile(xs, 50), 1),
+            "p95": round(_percentile(xs, 95), 1),
+            "p99": round(_percentile(xs, 99), 1),
+            "mean": round(sum(xs) / len(xs), 1) if xs else 0.0,
+            "max": round(max(xs), 1) if xs else 0.0,
+            "window": len(xs),
+        },
+        "by_status": by_status,
+    }
+
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus text exposition (scrapeable)."""
+    xs, total, errors, by_status, _ = _snapshot()
+    lines = [
+        "# HELP spectra_requests_total Total prediction requests served.",
+        "# TYPE spectra_requests_total counter",
+        f"spectra_requests_total {total}",
+        "# HELP spectra_request_errors_total Total 5xx responses.",
+        "# TYPE spectra_request_errors_total counter",
+        f"spectra_request_errors_total {errors}",
+        "# HELP spectra_request_latency_ms Request latency quantiles (ms).",
+        "# TYPE spectra_request_latency_ms summary",
+        f'spectra_request_latency_ms{{quantile="0.5"}} {_percentile(xs, 50):.1f}',
+        f'spectra_request_latency_ms{{quantile="0.95"}} {_percentile(xs, 95):.1f}',
+        f'spectra_request_latency_ms{{quantile="0.99"}} {_percentile(xs, 99):.1f}',
+        f"spectra_request_latency_ms_count {len(xs)}",
+    ]
+    for st, n in sorted(by_status.items()):
+        lines.append(f'spectra_responses_total{{status="{st}"}} {n}')
+    return Response("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
