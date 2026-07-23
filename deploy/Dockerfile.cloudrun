@@ -1,0 +1,10 @@
+# syntax=docker/dockerfile:1
+# Self-contained image for Cloud Run (no persistent volume): the serving image
+# with a trained checkpoint BAKED IN. Build order:
+#   docker build --platform linux/amd64 -f deploy/Dockerfile          -t spectra:latest        .
+#   docker build --platform linux/amd64 -f deploy/Dockerfile.cloudrun -t spectra-cloudrun:latest .
+# Put the trained weights at models/model.pt in the build context first.
+FROM spectra:latest
+COPY --chown=appuser:appuser models/model.pt /home/appuser/model.pt
+ENV SPECTRA_CHECKPOINT=/home/appuser/model.pt
+# entrypoint + $PORT handling inherited from the base image.

@@ -60,3 +60,50 @@ wheel, run with `--gpus all` (needs the NVIDIA Container Toolkit), and set
 For real deployments, don't bake large checkpoints into the image. Pull the
 trained `model.pt` from an artifact store / release asset at container start
 (init step or entrypoint), or mount it from a model volume / object store.
+
+
+## Deploy to Google Cloud Run (scale-to-zero public endpoint)
+
+The serving container listens on `$PORT` (Cloud Run injects it) and runs as a
+non-root user, so it deploys to Cloud Run, Fly.io, or Render unchanged. Cloud
+Run has no persistent volume, so the trained checkpoint is **baked in** via
+`Dockerfile.cloudrun`.
+
+**One-time setup**
+
+```bash
+gcloud auth login
+export GCP_PROJECT=your-project GCP_REGION=us-central1
+gcloud config set project "$GCP_PROJECT"
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com
+gcloud artifacts repositories create spectra \
+    --repository-format=docker --location="$GCP_REGION"
+```
+
+**Deploy (one command)**
+
+```bash
+GCP_PROJECT=your-project ./deploy/deploy_cloudrun.sh
+```
+
+It builds the base image, bakes `models/model.pt`, pushes to Artifact Registry,
+deploys a scale-to-zero revision (`--min-instances 0`), and prints the live
+HTTPS URL. Test it:
+
+```bash
+URL=$(gcloud run services describe spectra --region "$GCP_REGION" --format='value(status.url)')
+curl -s "$URL/health"
+curl -s -X POST "$URL/predict" -H 'content-type: application/json' -d @deploy/sample_request.json
+```
+
+**Continuous deployment.** `.github/workflows/deploy-cloudrun.yml` does the same
+on every `v*` tag via Workload Identity Federation — set repo secrets
+`GCP_WIF_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT` (and optional var
+`GCP_REGION`), then `git tag v0.1.0 && git push --tags`.
+
+**Serving real predictions.** `models/model.pt` in the repo is the *untrained*
+smoke-test checkpoint (meaningless scores). To serve real predictions, replace
+it with the trained checkpoint from the cluster (the 15-fold CV winner) before
+building — e.g. `scp seadragon:$SCRATCH/spectra/out/.../best.ckpt models/model.pt`.
+Because it is a real weight file, track it with **git-lfs** rather than committing
+35 MB into git history.

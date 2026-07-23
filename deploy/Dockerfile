@@ -55,10 +55,15 @@ RUN useradd -m -u 10001 appuser && chown -R appuser:appuser /opt/hf-cache
 USER appuser
 WORKDIR /home/appuser
 
-EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').getcode()==200 else 1)"
+# PORT-aware entrypoint so the same image runs on Cloud Run / Fly / Render
+# (which inject $PORT) and locally (defaults to 8000).
+COPY --chown=appuser:appuser deploy/entrypoint.sh /home/appuser/entrypoint.sh
+RUN chmod +x /home/appuser/entrypoint.sh
 
-# Provide the trained weights at runtime:
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+  CMD python -c "import os,urllib.request,sys; p=os.environ.get('PORT','8000'); sys.exit(0 if urllib.request.urlopen(f'http://localhost:{p}/health').getcode()==200 else 1)"
+
+# Provide the trained weights at runtime (mount) OR bake them in (Dockerfile.cloudrun):
 #   -e SPECTRA_CHECKPOINT=/models/model.pt  -v $PWD/models:/models:ro
-CMD ["uvicorn", "spectra.inference.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/home/appuser/entrypoint.sh"]

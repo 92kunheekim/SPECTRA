@@ -1,0 +1,42 @@
+name: deploy-cloudrun
+# Continuous deployment: on a version tag, build the checkpoint-baked image,
+# push it to Artifact Registry, and roll out a new Cloud Run revision.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # Workload Identity Federation (no long-lived keys)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build, push, and deploy
+        env:
+          PROJECT: ${{ secrets.GCP_PROJECT }}
+          REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+        run: |
+          set -euo pipefail
+          IMAGE="$REGION-docker.pkg.dev/$PROJECT/spectra/spectra:${GITHUB_SHA::7}"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -f deploy/Dockerfile          -t spectra:latest .
+          docker build -f deploy/Dockerfile.cloudrun -t "$IMAGE"       .
+          docker push "$IMAGE"
+          gcloud run deploy spectra \
+            --image "$IMAGE" --project "$PROJECT" --region "$REGION" \
+            --platform managed --allow-unauthenticated \
+            --cpu 2 --memory 2Gi --min-instances 0 --max-instances 5 \
+            --concurrency 8 --timeout 120 \
+            --set-env-vars SPECTRA_MODE=E,SPECTRA_DEVICE=cpu
+          gcloud run services describe spectra --project "$PROJECT" --region "$REGION" \
+            --format='value(status.url)'
