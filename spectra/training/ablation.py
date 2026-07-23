@@ -207,7 +207,7 @@ def _dump_predictions(model, ckpt_path, eval_ds, collate_fn, args, out_dir):
     import pandas as pd
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     if ckpt_path and os.path.exists(str(ckpt_path)):
-        sd = torch.load(ckpt_path, map_location="cpu")
+        sd = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         sd = sd.get("state_dict", sd)
         sd = {k[len("model."):]: v for k, v in sd.items() if k.startswith("model.")}
         model.load_state_dict(sd, strict=False)
@@ -410,6 +410,10 @@ def _parse_with_config(parser, argv=None):
 
 
 def run(args):
+    import warnings
+    torch.set_float32_matmul_precision("high")   # use A40/A100 tensor cores for fp32 matmuls
+    warnings.filterwarnings("ignore", message=r".*torch\.cuda\.amp\.GradScaler.*")
+    warnings.filterwarnings("ignore", message=r".*weights_only=False.*")
     out_base = Path(args.out_dir)
     out_base.mkdir(parents=True, exist_ok=True)
 
