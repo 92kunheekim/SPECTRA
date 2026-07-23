@@ -1,0 +1,27 @@
+# Core
+torch>=2.1
+transformers>=4.38
+numpy>=1.24
+pandas>=2.0
+scikit-learn>=1.3
+scipy>=1.10
+pyyaml>=6.0
+tqdm>=4.65
+
+# Training / metrics
+pytorch-lightning>=2.1
+torchmetrics>=1.2
+
+# Graph backbones (install per your CUDA build; see docs/setup.md)
+# torch-geometric>=2.5
+# dgl>=2.1
+
+# Structure / bio
+biopython>=1.83
+
+# Optional: parameter-efficient finetuning
+# peft>=0.9
+
+# Viz
+matplotlib>=3.7
+seaborn>=0.13

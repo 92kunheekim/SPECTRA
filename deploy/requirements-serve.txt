@@ -1,0 +1,9 @@
+# Minimal, pinned runtime deps for the SPECTRA inference service.
+# torch is installed separately in the Dockerfile from the CPU wheel index.
+transformers==4.40.2
+huggingface-hub==0.23.0
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.1
+numpy==1.26.4
+pandas==2.2.2

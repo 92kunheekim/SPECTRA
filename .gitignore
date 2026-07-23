@@ -46,3 +46,8 @@ dist/
 ._*
 .vscode/
 .idea/
+
+# --- keep requirements files (the *.txt rule above would otherwise drop them) ---
+!requirements.txt
+!requirements-*.txt
+!deploy/requirements-*.txt
