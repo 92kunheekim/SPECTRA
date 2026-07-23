@@ -1,0 +1,5 @@
+# Sequence-only baseline — mode A: single concatenated chain, [CLS], no Rosetta.
+modes: [A]
+batch_size: 32
+epochs: 30
+lr: 0.0003

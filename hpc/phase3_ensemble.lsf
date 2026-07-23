@@ -1,0 +1,30 @@
+#!/bin/bash
+# Phase 3 — 5-seed ensemble of the winning mode on fold 0, one seed per task.
+# Submit:  SPECTRA_WINNER=E bsub < hpc/phase3_ensemble.lsf
+#BSUB -q egpu
+#BSUB -gpu num=1:gmem=32
+#BSUB -n 8
+#BSUB -M 48
+#BSUB -R rusage[mem=48]
+#BSUB -W 16:00
+#BSUB -J spectra_p3[1-5]
+#BSUB -o logs/%J_%I.out
+#BSUB -e logs/%J_%I.err
+set -euo pipefail
+module load apptainer 2>/dev/null || module load singularity 2>/dev/null || true
+SIF="${SPECTRA_SIF:-$HOME/spectra-train.sif}"
+SCRATCH="${SPECTRA_SCRATCH:-/rsrch3/scratch/genomic_med/$USER}"
+DATA_DIR="${SPECTRA_DATA_DIR:-$SCRATCH/spectra}"
+OUT="${SPECTRA_OUT_DIR:-$DATA_DIR/out}"
+ESM_DIR="${SPECTRA_ESM_CKPT:-$SCRATCH/huggingface_model/facebook/esm2_t6_8M_UR50D}"
+CSV="$DATA_DIR/training_rosetta.csv"
+SPLIT="$DATA_DIR/training_data_split_leakfree.json"
+mkdir -p logs "$OUT"
+SEEDS=(42 123 456 789 2024)
+SEED=${SEEDS[$((LSB_JOBINDEX - 1))]}
+apptainer exec --nv --bind "$SCRATCH:$SCRATCH" "$SIF" \
+  python -m spectra.training.train --modes "${SPECTRA_WINNER:-E}" --seed "$SEED" \
+    --data_csv "$CSV" --split_json "$SPLIT" --fold 0 \
+    --esm_checkpoint "$ESM_DIR" \
+    --devices 1 --out_dir "$OUT/phase3_ensemble/seed_$SEED" \
+    --epochs 30 --batch_size 32 --num_workers 8

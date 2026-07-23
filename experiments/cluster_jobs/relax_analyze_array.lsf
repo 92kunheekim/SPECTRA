@@ -1,0 +1,61 @@
+#BSUB -J relax_analyze[463]
+#BSUB -n 2
+#BSUB -M 8
+#BSUB -R rusage[mem=8]
+#BSUB -q medium
+#BSUB -W 48:00
+#BSUB -o ${SPECTRA_ROOT}/app/ImmunoStruct/data/rosetta/logs/%J_%I.out
+#BSUB -e ${SPECTRA_ROOT}/app/ImmunoStruct/data/rosetta/logs/%J_%I.out
+
+SIF="${SPECTRA_ROOT}/containers/rosetta.sif"
+PDB_DIR="${SPECTRA_ROOT}/data/STAG-LLM/data/top_structures"
+BASE_OUTDIR="${SPECTRA_ROOT}/data/rosetta"
+
+BATCH_SIZE=250
+BATCH_IDX=$((${LSB_JOBINDEX} - 1))
+BATCH_START=$((BATCH_IDX * BATCH_SIZE))
+OUTDIR="${BASE_OUTDIR}/batch_${BATCH_IDX}"
+mkdir -p "$OUTDIR/relaxed" "$OUTDIR/logs"
+
+cd "$PDB_DIR"
+shopt -s nullglob
+all_pdbs=( ./*.pdb )
+pdbs=( "${all_pdbs[@]:$BATCH_START:$BATCH_SIZE}" )
+
+# --bind mounts host directories into the container
+# The container sees the same paths as the host
+SING="singularity exec --bind ${PDB_DIR}:${PDB_DIR},${BASE_OUTDIR}:${BASE_OUTDIR} ${SIF}"
+
+# Step 1: FastRelax
+$SING relax.default.linuxgccrelease \
+  -s "${pdbs[@]}" \
+  -nstruct 1 \
+  -relax:constrain_relax_to_start_coords \
+  -relax:coord_constrain_sidechains \
+  -relax:ramp_constraints false \
+  -use_input_sc -ex1 -ex2 \
+  -ignore_unrecognized_res \
+  -ignore_zero_occupancy false \
+  -out:path:pdb "$OUTDIR/relaxed/" \
+  -out:file:scorefile "$OUTDIR/relax_scores.out" \
+  -out:no_nstruct_label
+
+# Step 2: InterfaceAnalyzer
+cd "$OUTDIR/relaxed"
+relaxed_pdbs=( ./*.pdb )
+
+$SING InterfaceAnalyzer.default.linuxgccrelease \
+  -s "${relaxed_pdbs[@]}" \
+  -interface DE_AC \
+  -pack_input false \
+  -pack_separated true \
+  -compute_packstat true \
+  -tracer_data_print false \
+  -atomic_burial_cutoff 0.3 \
+  -sasa_calculator_probe_radius 1.4 \
+  -pose_metrics::inter_group_neighbors_cutoff 12 \
+  -out:file:score_only "$OUTDIR/interface_scores.out" \
+  -use_jobname true \
+  -use_input_sc \
+  -add_regular_scores_to_scorefile true \
+  -ignore_unrecognized_res

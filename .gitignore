@@ -1,0 +1,48 @@
+# ---- Data & models (never commit) ----
+data/**
+!data/README.md
+!data/examples/
+*.pdb
+*.csv
+*.tsv
+*.txt
+*.parquet
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.tflite
+*.sif
+*.whl
+
+# ---- Caches / outputs ----
+.cache/
+outputs/
+wandb/
+lightning_logs/
+tb_logs/
+figures/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---- OS / editor ----
+.DS_Store
+._*
+.vscode/
+.idea/

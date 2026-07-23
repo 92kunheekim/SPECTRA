@@ -1,0 +1,29 @@
+#!/bin/bash
+# Phase 0 — smoke test on gpu-test: confirm the container sees the GPU and one
+# training step runs. Submit:  bsub < hpc/phase0_smoke.lsf
+#BSUB -q gpu-test
+#BSUB -gpu num=1:gmem=16
+#BSUB -n 4
+#BSUB -M 16
+#BSUB -R rusage[mem=16]
+#BSUB -W 1:00
+#BSUB -J spectra_smoke
+#BSUB -o logs/%J.out
+#BSUB -e logs/%J.err
+set -euo pipefail
+module load apptainer 2>/dev/null || module load singularity 2>/dev/null || true
+SIF="${SPECTRA_SIF:-$HOME/spectra-train.sif}"
+SCRATCH="${SPECTRA_SCRATCH:-/rsrch3/scratch/genomic_med/$USER}"
+DATA_DIR="${SPECTRA_DATA_DIR:-$SCRATCH/spectra}"
+OUT="${SPECTRA_OUT_DIR:-$DATA_DIR/out}"
+ESM_DIR="${SPECTRA_ESM_CKPT:-$SCRATCH/huggingface_model/facebook/esm2_t6_8M_UR50D}"
+CSV="$DATA_DIR/training_rosetta.csv"
+SPLIT="$DATA_DIR/training_data_split_leakfree.json"
+mkdir -p logs "$OUT"
+apptainer exec --nv "$SIF" python -c "import torch; print('cuda visible:', torch.cuda.is_available())"
+apptainer exec --nv --bind "$SCRATCH:$SCRATCH" "$SIF" \
+  python -m spectra.training.ablation --modes A \
+    --data_csv "$CSV" --split_json "$SPLIT" --fold 0 \
+    --esm_checkpoint "$ESM_DIR" \
+    --devices 1 --out_dir "$OUT/phase0_smoke" \
+    --epochs 1 --batch_size 32 --num_workers 4

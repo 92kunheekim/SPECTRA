@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use SPECTRA, please cite this repository and the upstream works listed in NOTICE."
+title: "SPECTRA: Structure, Protein-language, and Energetics via Cross-attention for TR-pMHC Affinity"
+authors:
+  - family-names: Kim
+    given-names: KH
+version: 0.1.0
+date-released: 2026-07-23
+license: LicenseRef-Yale-NonCommercial
+repository-code: "https://github.com/<your-username>/SPECTRA"
+keywords: [TCR, pMHC, immunology, ESM-2, LoRA, graph-neural-network, Rosetta, drug-discovery]

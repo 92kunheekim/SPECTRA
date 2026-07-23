@@ -1,0 +1,19 @@
+# Base hyperparameters. Use directly ( --config configs/default.yaml ) or via a
+# per-model config in configs/model/. CLI flags override these. Keys match the
+# training CLI (see: python -m spectra.training.train --help).
+epochs: 30
+batch_size: 16
+lr: 0.0003
+esm_lr: 0.00001
+weight_decay: 0.0001
+warmup_epochs: 3
+patience: 7
+d_model: 128
+d_fused: 256
+n_cross_heads: 4
+dropout: 0.2
+val_split: 0.15
+seed: 42
+num_workers: 4
+devices: auto
+precision: 16-mixed

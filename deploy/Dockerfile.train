@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+# =====================================================================
+# SPECTRA GPU TRAINING image (CUDA 12.1). Carries the framework only —
+# ESM-2 weights and data are BIND-MOUNTED at runtime (they already live on
+# seadragon scratch), so the image stays small and needs no network at build.
+#
+#   docker build -f deploy/Dockerfile.train -t ghcr.io/<user>/spectra-train:latest .
+#   docker push ghcr.io/<user>/spectra-train:latest
+#   # on a seadragon LOGIN node:
+#   apptainer pull spectra-train.sif docker://ghcr.io/<user>/spectra-train:latest
+#   # in a GPU job (ESM + data come from scratch via --bind / --esm_checkpoint):
+#   apptainer exec --nv --bind $SCRATCH:$SCRATCH spectra-train.sif \
+#       python -m spectra.training.ablation --modes E \
+#         --data_csv $SCRATCH/spectra/training_rosetta.csv \
+#         --esm_checkpoint $SCRATCH/huggingface_model/facebook/esm2_t6_8M_UR50D ...
+# =====================================================================
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /opt/spectra
+
+# training/eval deps (torch is already in the base image)
+COPY deploy/requirements-train.txt .
+RUN pip install --no-cache-dir -r requirements-train.txt
+
+# install the package without re-pulling its declared (heavier) deps
+COPY pyproject.toml requirements.txt README.md LICENSE ./
+COPY spectra ./spectra
+RUN pip install --no-cache-dir --no-deps .
+
+# ESM-2 weights are NOT baked — pass --esm_checkpoint pointing at a bind-mounted
+# directory (e.g. $SCRATCH/huggingface_model/facebook/esm2_t6_8M_UR50D).
+# Optional graph backends for the flagship EGNN track:
+# RUN pip install --no-cache-dir torch-geometric==2.5.3 dgl==2.1.0
+
+CMD ["python", "-c", "import spectra, torch; print('SPECTRA', spectra.__version__, '| torch', torch.__version__, '| cuda', torch.cuda.is_available())"]

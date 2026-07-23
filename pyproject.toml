@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectra-tcr"
+version = "0.1.0"
+description = "Multimodal TCR-pMHC binding prediction: ESM-2 (LoRA) + structure + Rosetta energetics via cross-attention."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "KH Kim"}]
+keywords = ["TCR", "pMHC", "immunology", "protein-language-model", "ESM-2", "GNN", "drug-discovery"]
+classifiers = [
+  "Programming Language :: Python :: 3.10",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dynamic = ["dependencies"]
+
+
+[project.optional-dependencies]
+serve = ["fastapi==0.111.0", "uvicorn[standard]==0.29.0", "pydantic==2.7.1", "transformers==4.40.2", "pandas==2.2.2", "numpy==1.26.4"]
+graph = ["torch-geometric>=2.5", "dgl>=2.1"]
+dev = ["ruff>=0.6", "pytest>=8.0", "pre-commit>=3.7"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+include = ["spectra*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

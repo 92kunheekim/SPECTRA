@@ -1,0 +1,59 @@
+#!/bin/bash
+#BSUB -W 48:00
+#BSUB -q egpu
+#BSUB -gpu num=1:gmem=32
+#BSUB -n 1
+#BSUB -M 32
+#BSUB -R rusage[mem=32]
+#BSUB -J pretrain_s1
+#BSUB -o ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/pretrain/logs/%J_s1.out
+#BSUB -e ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/pretrain/logs/%J_s1.err
+
+module purge
+module load miniforge3
+eval "$(/risapps/rhel8/miniforge3/24.5.0-0/bin/conda shell.bash hook)"
+conda activate immunostruct
+
+module load cuda12.2/fft/12.2.2
+module load cuda12.2/nsight/12.2.2
+module load cuda12.2/profiler/12.2.2
+module load cuda12.2/toolkit/12.2.2
+module load cuda12.2/blas/12.2.2
+module load gcc/12.4.0
+
+cd "$HOME/app/ImmunoStruct/model"
+
+mkdir -p ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/pretrain/logs
+
+# ==============================================================
+# Stage 1: All in silico structures (binders + non-binders)
+# ESM fully frozen — trains EGNN, cross-attention, classifier, regressor
+#
+# Input CSV format:
+#   tcr_id,binding_label,rosetta_score
+#   PEPTIDE_CDR3A_CDR3B,1,24.196
+#   PEPTIDE_CDR3A_CDR3B,0,
+# ==============================================================
+python pretrain_rosetta.py \
+    --stage 1 \
+    --data_csv ${SPECTRA_ROOT}/app/ImmunoStruct/data/pretraining_df_1.csv \
+    --pdb_dir ${SPECTRA_ROOT}/data/STAG-LLM/data/top_structures/ \
+    --cache_dir ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/pretrain_cache \
+    --esm_checkpoint ${SPECTRA_ROOT}/data/models/facebook/esm2_t6_8M_UR50D \
+    --d_model 256 \
+    --egnn_hidden 128 \
+    --egnn_layers 5 \
+    --egnn_out_dim 128 \
+    --n_cross_heads 8 \
+    --batch_size 16 \
+    --epochs 30 \
+    --lr 1e-3 \
+    --weight_decay 1e-4 \
+    --warmup_epochs 3 \
+    --n_tune_layers 0 \
+    --lambda_bind 1.0 \
+    --lambda_rosetta 1.0 \
+    --patience 5 \
+    --val_split 0.15 \
+    --seed 42 \
+    --out_dir ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/pretrain

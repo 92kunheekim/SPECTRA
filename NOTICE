@@ -1,0 +1,29 @@
+SPECTRA
+=======
+This project is a derivative research work and builds upon prior open-source
+projects. It is distributed under the Yale Non-Commercial License (see LICENSE).
+
+Upstream / attributed works:
+
+1. ImmunoStruct  (Krishnaswamy Lab, Yale University)
+   https://github.com/KrishnaswamyLab/ImmunoStruct
+   Provides the multimodal (sequence + structure + biochemical) modeling
+   foundation and the EGNN / VAE components on which SPECTRA is based.
+   Givechian et al., Nature Machine Intelligence (2025).
+
+2. STAG-LLM  (Kavraki Lab, Rice University)
+   https://github.com/KavrakiLab/STAG_public
+   Inspiration for the pseudo-heterogeneous graph transformer (per-edge-type
+   message passing over the TCR-pMHC interface) and ESM+structure fusion.
+   Slone et al., Computational and Structural Biotechnology Journal (2025).
+
+3. ESM-2  (Meta AI / Facebook Research)
+   https://github.com/facebookresearch/esm
+   Pretrained protein language model used as the sequence backbone.
+
+Original contributions in SPECTRA (see ARCHITECTURE.md):
+  - ESM-2 + chain-specific LoRA post-training for TCR/pMHC
+  - Multimodal gated cross-attention fusion of language, structure, and
+    Rosetta interface energetics
+  - Two-stage Rosetta multi-task pretraining
+  - The A-H architecture ablation matrix and multi-seed ensembling

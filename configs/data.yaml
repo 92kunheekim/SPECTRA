@@ -1,0 +1,10 @@
+# NOTE: reference documentation of the data pipeline (negative sampling,
+# redundancy reduction) — not consumed directly by --config.
+# Dataset-specific overrides (columns, negative sampling, redundancy reduction).
+negatives:
+  strategy: peptide_swap      # peptide_swap | random
+  ratio: 5
+  min_levenshtein: 3
+redundancy_reduction:
+  method: hobohm1
+  cdr3_similarity_threshold: 0.95

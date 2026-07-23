@@ -1,0 +1,46 @@
+#!/bin/bash
+#BSUB -W 72:00
+#BSUB -q egpu
+#BSUB -gpu num=1:gmem=32
+#BSUB -n 1
+#BSUB -M 32
+#BSUB -R rusage[mem=32]
+#BSUB -o ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/logs/%J.out
+#BSUB -e ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/logs/%J.out
+#BSUB -J test_imm
+
+module purge
+module load miniforge3 
+eval "$(/risapps/rhel8/miniforge3/24.5.0-0/bin/conda shell.bash hook)"
+conda activate immunostruct
+
+module load cuda12.2/fft/12.2.2
+module load cuda12.2/nsight/12.2.2
+module load cuda12.2/profiler/12.2.2
+module load cuda12.2/toolkit/12.2.2
+module load cuda12.2/blas/12.2.2
+module load gcc/12.4.0
+
+cd "$HOME/app/ImmunoStruct/model"
+
+# python train.py \
+# --csv ../data/training_df.csv \
+# --pdb_dir ${SPECTRA_ROOT}/data/STAG-LLM/data/top_structures/ \
+# --folds_json ${SPECTRA_ROOT}/app/ImmunoStruct/data/leakage_free/training_data_split_leakfree.json \
+# --fold 0 \
+# --output_dir ${SPECTRA_ROOT}/project/TCRpMHC/outputs/MyModel/ \
+# --cache_dir ${SPECTRA_ROOT}/data/STAG-LLM/immunostruct_cache2 \
+
+
+python train.py --model_type esm \
+    --csv ../data/training_df.csv --pdb_dir ${SPECTRA_ROOT}/data/STAG-LLM/data/top_structures/ --folds_json ${SPECTRA_ROOT}/app/ImmunoStruct/data/leakage_free/training_data_split_leakfree.json.json \
+    --fold 0 \
+    --esm_checkpoint ${SPECTRA_ROOT}/data/models/facebook/esm2_t6_8M_UR50D --freeze_esm \
+    --batch_size 16
+
+# Model B (ESM, phased fine-tuning)
+python train.py --model_type esm \
+    --csv ../data/training_df.csv --pdb_dir ${SPECTRA_ROOT}/data/STAG-LLM/data/top_structures/ --folds_json ${SPECTRA_ROOT}/app/ImmunoStruct/data/leakage_free/training_data_split_leakfree.json.json \
+    --fold 0 \
+    --esm_checkpoint ${SPECTRA_ROOT}/data/models/facebook/esm2_t6_8M_UR50D --freeze_esm \
+    --phase2_unfreeze_layers 2 --phase2_epochs 20 --phase2_lr 5e-5

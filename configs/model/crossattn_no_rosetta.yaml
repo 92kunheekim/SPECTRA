@@ -1,0 +1,5 @@
+# Cross-attention without energetics — mode D: 4-chain cross-attn, no Rosetta.
+modes: [D]
+d_model: 128
+batch_size: 16
+epochs: 30

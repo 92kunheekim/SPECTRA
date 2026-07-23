@@ -1,0 +1,10 @@
+# Full model — mode E: 4-chain cross-attention + Rosetta energetics.
+modes: [E]
+d_model: 128
+d_fused: 256
+n_cross_heads: 4
+dropout: 0.2
+batch_size: 16
+epochs: 30
+lr: 0.0003
+esm_lr: 0.00001

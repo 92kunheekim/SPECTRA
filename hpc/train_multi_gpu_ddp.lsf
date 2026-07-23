@@ -1,0 +1,32 @@
+#!/bin/bash
+# Multi-GPU DDP on a SINGLE node (4 GPUs). PyTorch Lightning launches one
+# process per GPU; DistributedSampler shards each batch across GPUs.
+#   Submit:  bsub < hpc/train_multi_gpu_ddp.lsf
+#BSUB -W 24:00
+#BSUB -q egpu
+#BSUB -gpu "num=4:gmem=32:mode=exclusive_process:aff=yes"
+#BSUB -n 8                                 # CPU workers for the dataloaders
+#BSUB -M 64
+#BSUB -R rusage[mem=64]
+#BSUB -R span[hosts=1]                      # all 4 GPUs on one host
+#BSUB -J spectra_ddp
+#BSUB -o logs/%J_ddp.out
+#BSUB -e logs/%J_ddp.err
+
+set -euo pipefail
+module purge
+module load miniforge3 cuda12.2/toolkit/12.2.2 cuda12.2/blas/12.2.2 gcc/12.4.0
+eval "$(conda shell.bash hook)"; conda activate spectra
+
+export SPECTRA_DATA_DIR=${SPECTRA_DATA_DIR:-$HOME/spectra-data}
+export SPECTRA_OUT_DIR=${SPECTRA_OUT_DIR:-$PWD/outputs}
+export NCCL_DEBUG=WARN
+mkdir -p logs "$SPECTRA_OUT_DIR"
+
+# Lightning handles process spawning; request 4 GPUs + ddp + synced BN.
+python -m spectra.training.ablation \
+    --modes E \
+    --data_csv "$SPECTRA_DATA_DIR/training.csv" \
+    --devices 4 --strategy ddp --sync-batchnorm \
+    --precision bf16-mixed \
+    --epochs 30 --batch_size 32
