@@ -3,15 +3,31 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-    paths: ["spectra/**", "deploy/**", "pyproject.toml", "requirements.txt"]
+    paths:
+      - "spectra/**"
+      - "deploy/**"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/docker.yml"
   pull_request:
     branches: [main]
-    paths: ["spectra/**", "deploy/**", "pyproject.toml", "requirements.txt"]
+    paths:
+      - "spectra/**"
+      - "deploy/**"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/docker.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+# One in-flight run per ref; cancel superseded pushes so :latest always
+# reflects the newest commit rather than whichever build finished last.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # CPU serving image — build on every event; push on non-PR.
@@ -41,17 +57,27 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
           provenance: false
+          sbom: false
 
   # GPU training image (large CUDA base) — build + push only on push/tag, not PRs.
   train:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     steps:
+      # The CUDA base image is multi-GB; the default runner disk (~14 GB) can
+      # overflow mid-build and abort the push, silently freezing :latest at the
+      # last image that fit. Reclaim space the toolchain images don't need.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
@@ -74,8 +100,10 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.train
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
           provenance: false
+          sbom: false

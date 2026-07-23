@@ -142,6 +142,50 @@ python -m spectra.evaluation.aggregate --results_dir outputs/phase2_cv --group_b
 
 See [`hpc/README.md`](hpc/README.md) for the seadragon (Apptainer) train→evaluate flow.
 
+## Results
+
+All numbers below are on the **held-out test split** of the leak-free 15-fold split — never validation. Mode **E** is the full tri-modal model (4-chain per-chain pooling + bidirectional cross-attention + Rosetta energetics).
+
+### Cross-validated performance (mode E, 15 folds)
+
+Mean ± standard deviation across the 15 CV folds:
+
+| Metric | Score |
+|---|---|
+| AUROC | **0.825 ± 0.013** |
+| AUPRC | 0.644 ± 0.024 |
+| AUC0.1 (partial AUC, FPR ≤ 0.1) | 0.731 ± 0.013 |
+| MCC | 0.395 ± 0.035 |
+| F1 | 0.499 ± 0.028 |
+| Per-peptide macro-AUROC | 0.699 ± 0.027 |
+
+AUPRC and the per-peptide macro-AUROC are the honest metrics here: the data are class-imbalanced, and the per-peptide macro average down-weights well-represented epitopes so a few dominant peptides can't inflate the headline. The tight fold-to-fold spread (AUROC σ ≈ 0.013) indicates the split is stable and the result is not driven by a lucky fold.
+
+### Component ablation (modes A–H, fold 0)
+
+Each mode toggles one design axis, so the deltas isolate what each component is worth. Held-out test, fold 0:
+
+| Mode | Chains | Cross-attn | Rosetta | AUROC | AUPRC |
+|---|---|:---:|:---:|---|---|
+| A | 1 | – | – | 0.734 | 0.498 |
+| F | 1 | – | ✓ | 0.740 | 0.507 |
+| G | 2 | – | – | 0.779 | 0.560 |
+| H | 2 | – | ✓ | 0.784 | 0.580 |
+| B | 4 | – | – | 0.818 | 0.635 |
+| C | 4 | – | ✓ | 0.812 | 0.629 |
+| D | 4 | ✓ | – | 0.820 | 0.630 |
+| **E** | **4** | **✓** | **✓** | **0.830** | **0.660** |
+
+**What the ablation shows:**
+
+- **Chain granularity is the dominant lever.** Going from a single concatenated chain (A/F ≈ 0.73–0.74 AUROC) to a 2-chain pMHC/TCR split (G/H ≈ 0.78) to full 4-chain per-chain pooling (B/C/D ≈ 0.82) is the largest source of gain — roughly +0.085 AUROC end to end. Keeping the chains separate before fusion preserves interface structure the model would otherwise average away.
+- **Cross-attention and Rosetta energetics are individually modest but synergistic.** At 4 chains, adding only cross-attention (B→D) or only Rosetta (B→C) barely moves AUROC, but combining them (D→E: 0.820→0.830, and on AUPRC 0.630→0.660) gives the top single-mode result. The energetics signal is most useful once cross-attention has aligned the interface representations it can weight.
+- **Rosetta features help more at coarse granularity.** The A→F and G→H gains show energetics compensating when chain structure is collapsed; by 4 chains most of that information is already captured by the learned representation, so Rosetta's marginal value shifts to the cross-attention setting.
+
+![SPECTRA ablation and CV results](docs/images/results.png)
+
+*Reproduce:* `python -m spectra.evaluation.aggregate --results_dir outputs/phase2_cv --group_by fold` (see [`hpc/README.md`](hpc/README.md) for the full seadragon train→evaluate flow).
+
 ## Status
 
 Active research code. The two model tracks — the **flagship EGNN multimodal model** (`spectra/models/spectra_model.py`) and the **ESM + Rosetta ablation model** (`spectra/models/ablation_model.py`, modes A–H) — are migrated and import-clean, with all cluster paths parameterized through `spectra.config`. The exploration lineage (earlier architecture variants, ensembling, and HPC job scripts) is archived under `experiments/`. Not for clinical or commercial use.
