@@ -125,8 +125,40 @@ The sequence-based model serves without the structure pipeline:
 - **REST API (FastAPI):** `uvicorn spectra.inference.api:app` → `POST /predict`
 - **Docker:** multi-stage CPU image, ESM-2 baked in, non-root, healthcheck — `docker build -f deploy/Dockerfile -t spectra .`
 - **Smoke test (no trained model needed):** `bash deploy/smoke_test.sh`
+- **Serverless (live):** deployed on **Modal** as a public scale-to-zero endpoint (`modal deploy deploy/modal_app.py`); the same container recipe targets **Google Cloud Run** (`deploy/deploy_cloudrun.sh`).
+- **Observability:** `GET /stats` (JSON latency percentiles) and `GET /metrics` (Prometheus text).
 
 See [`deploy/README.md`](deploy/README.md) and [`docs/deployment.md`](docs/deployment.md).
+
+## Performance (deployed inference)
+
+Measured against the live serverless endpoint (Modal, CPU, mode-E, ESM-2 `t6`)
+with the standard-library load-tester (`deploy/loadtest/load_test.py`):
+
+| Metric | Value |
+|---|---|
+| Warm latency **p50** | **524 ms** end-to-end (~240 ms server-side compute) |
+| Warm latency **p95** | 605 ms |
+| Warm latency **p99** | 659 ms |
+| Throughput | **8 req/s** @ concurrency 8 (120 requests, **0 errors**) |
+| Cold start (scale-from-zero) | ~9 s |
+
+Warm figures are 30 sequential requests against a hot container. About half of the
+524 ms p50 is client↔cloud network round-trip and ~240 ms is model compute
+(confirmed by the server-side `/stats` view). The ~9 s cold start is the
+scale-to-zero trade-off — the container loads torch + ESM on the first request
+after idle, in exchange for **zero cost while idle**. Under burst concurrency Modal
+autoscales more containers, so tail latency during a cold fan-out includes their
+one-time cold starts.
+
+```bash
+# reproduce
+python deploy/loadtest/load_test.py https://<workspace>--spectra-tcr-pmhc-fastapi-app.modal.run
+curl https://<workspace>--spectra-tcr-pmhc-fastapi-app.modal.run/stats
+```
+
+`/stats` is per-container (in-process), so under autoscaling it reflects a single
+replica; aggregate across replicas by scraping `/metrics` (Prometheus) centrally.
 
 ## Evaluation
 
